@@ -21,7 +21,8 @@ pub struct State {
     pub owner: CanonicalAddr,
     pub campaign_pool: HashMap<String, Campaign>,
     pub user_pool: HashMap<String, UserPool>,
-    pub creation_fee: Uint128,
+    pub withdrawable_creation_fee: Uint128,
+    pub claim_reward_fee: Uint128,
 }
 
 pub const STATE: Item<State> = Item::new("state");

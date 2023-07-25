@@ -10,14 +10,15 @@ pub fn instantiate(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    _msg: InstantiateMsg,
+    msg: InstantiateMsg,
 ) -> Result<Response, StdError> {
 
     let state = State {
         owner: deps.api.addr_canonicalize(info.sender.as_str())?,
         campaign_pool: HashMap::new(),
         user_pool: HashMap::new(),
-        creation_fee: Uint128::zero(),
+        withdrawable_creation_fee: Uint128::zero(),
+        claim_reward_fee: msg.claim_reward_fee.unwrap_or(Uint128::new(1000000000000000000)),
     };
 
     STATE.save(deps.storage, &state)?;
@@ -97,6 +98,12 @@ pub fn execute(
             user_address,
             reward_pool_id,
             amount
+        ),
+        ExecuteMsg::SetClaimFee {claim_fee} => set_claim_fee(
+            deps,
+            env,
+            info,
+            claim_fee,
         ),
     }
 }
@@ -194,6 +201,17 @@ pub fn claim(
     campaign_id: String,
 ) -> Result<Response, StdError>  {
     let mut state = STATE.load(deps.storage)?;
+
+    let amount_sent = match info.funds.get(0) {
+        Some(coin) => coin.amount,
+        None => Uint128::zero(),
+    };
+    let bond_denom = deps.querier.query_bonded_denom()?;
+
+    if amount_sent < state.claim_reward_fee {
+        return Err(StdError::generic_err(format!("You must attach {}{} to call this function", state.claim_reward_fee, bond_denom)));
+    }
+
     let mut amount = Uint128::zero();
 
     let user_pool_id = format!("{}_{}", info.sender.to_string(), campaign_id);
@@ -246,7 +264,7 @@ pub fn check(
                 return Err(StdError::generic_err("Provided amount is greater than the current campaign amount"));
             }
 
-            state.creation_fee += delta.unwrap();
+            state.withdrawable_creation_fee += delta.unwrap();
 
             res.push(CampaignCheckResponse {
                 campaign_id: request.campaign_id.clone(),
@@ -314,8 +332,8 @@ pub fn withdraw_fee(
         return Err(StdError::generic_err("Only contract owner can withdraw"));
     }
 
-    let amount = state.creation_fee;
-    state.creation_fee = Uint128::zero();
+    let amount = state.withdrawable_creation_fee;
+    state.withdrawable_creation_fee = Uint128::zero();
 
     STATE.save(deps.storage, &state)?;
     let bond_denom = deps.querier.query_bonded_denom()?;
@@ -463,12 +481,38 @@ pub fn set_upool(
         .add_attribute("method", "set_upool")
     );
 }
+pub fn set_claim_fee(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    claim_fee: Uint128,
+) -> Result<Response, StdError> {
+    let mut state = STATE.load(deps.storage)?;
+
+    if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner {
+        return Err(StdError::generic_err("Only contract owner can edit the claim fee"));
+    }
+
+    let old_claim_fee = state.claim_reward_fee;
+
+    state.claim_reward_fee = claim_fee;
+
+    STATE.save(deps.storage, &state)?;
+
+    return Ok(Response::new()
+        .add_attribute("method", "set_claim_fee")
+        .add_attribute("old_claim_fee", old_claim_fee.to_string())
+        .add_attribute("new_claim_fee", claim_fee.to_string())
+    );
+}
+
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetCpool { campaign_id } => query_campaign_pool(deps, env, campaign_id),
         QueryMsg::GetUpool { user_address, campaign_id } => query_user_pool(deps, env, user_address, campaign_id),
+        QueryMsg::GetClaimFee {} => query_claim_fee(deps, env),
     }
 }
 
@@ -476,7 +520,7 @@ fn query_campaign_pool(deps: Deps, _env: Env, campaign_id: String) -> StdResult<
     let state = STATE.load(deps.storage)?;
 
     if let Some(campaign) = state.campaign_pool.get(&campaign_id) {
-        to_binary(&campaign)
+        return to_binary(&campaign);
     } else {
         return Err(StdError::generic_err("Campaign does not exist"));
     }
@@ -486,9 +530,14 @@ fn query_user_pool(deps: Deps, _env: Env, user_address: String, reward_pool_id: 
     let state = STATE.load(deps.storage)?;
     let user_pool_id = format!("{}_{}", user_address, reward_pool_id);
 
-    if let Some(user_pool) = state.user_pool.get(&user_pool_id) {
-        return to_binary(&user_pool)
+    return if let Some(user_pool) = state.user_pool.get(&user_pool_id) {
+        to_binary(&user_pool)
     } else {
-        return Err(StdError::generic_err("User pool does not exist"));
+        Err(StdError::generic_err("User pool does not exist"))
     }
+}
+
+fn query_claim_fee(deps: Deps, _env: Env) -> StdResult<Binary> {
+    let state = STATE.load(deps.storage)?;
+    to_binary(&state.claim_reward_fee)
 }
