@@ -281,7 +281,7 @@ pub fn check(
     STATE.save(deps.storage, &state)?;
 
     return Ok(Response::new()
-        .add_attribute("method", "reward_all")
+        .add_attribute("method", "check")
         .set_data(to_binary(&res).unwrap())
     );
 }
