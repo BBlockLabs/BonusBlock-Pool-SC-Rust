@@ -196,7 +196,7 @@ pub fn reward_all(
         if let Some(campaign) = state.campaign_pool.get_mut(&request.campaign_id) {
             let user_pool_id = format!("{}_{}", request.user_address, request.campaign_id);
 
-            let flag: bool = campaign.amount > request.amount;
+            let flag: bool = campaign.amount >= request.amount;
 
             if flag {
                 if let Some(user_pool) = state.user_pool.get_mut(&user_pool_id) {
