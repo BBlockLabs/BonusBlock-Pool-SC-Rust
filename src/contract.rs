@@ -1,11 +1,10 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{DepsMut, Env, Response, MessageInfo, StdError, CosmosMsg, BankMsg, Coin, Uint128, Deps, StdResult, Binary, to_binary, Empty};
-use crate::state::{Campaign, State, STATE, UserPool};
-use std::collections::HashMap;
-use semver::Version;
+use crate::state::{Campaign, CAMPAIGN_POOL, State, STATE, USER_POOL};
 use crate::msg::{CampaignCheckRequest, CampaignCheckResponse, ExecuteMsg, InstantiateMsg, QueryMsg, UserRewardRequest, UserRewardResponse};
 use cw2::{get_contract_version, set_contract_version};
+use semver::Version;
 
 const CONTRACT_NAME: &str = "crates.io:reward_pool";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -20,11 +19,11 @@ pub fn instantiate(
 
     let state = State {
         owner: deps.api.addr_canonicalize(info.sender.as_str())?,
-        campaign_pool: HashMap::new(),
-        user_pool: HashMap::new(),
         withdrawable_creation_fee: Uint128::zero(),
         claim_reward_fee: msg.claim_reward_fee.unwrap_or(Uint128::new(1000000000000000000)),
     };
+
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     STATE.save(deps.storage, &state)?;
 
@@ -139,8 +138,6 @@ pub fn deposit(
     info: MessageInfo,
     campaign_id: String,
 ) -> Result<Response, StdError> {
-    let mut state = STATE.load(deps.storage)?;
-
     let bond_denom = deps.querier.query_bonded_denom()?;
     let mut funds = info.funds.clone();
     let coin = funds.pop();
@@ -158,20 +155,24 @@ pub fn deposit(
         return Err(StdError::generic_err("Invalid denom"));
     }
 
-    if let Some(campaign) = state.campaign_pool.get_mut(&campaign_id) {
-        campaign.amount += amount_sent;
-    } else {
-        state.campaign_pool.insert(
-            campaign_id.clone(),
-            Campaign {
-                owner: info.sender,
-                amount: amount_sent,
-                refundable: false,
-            },
-        );
-    }
 
-    STATE.save(deps.storage, &state)?;
+    match CAMPAIGN_POOL.may_load(deps.storage, campaign_id.clone())? {
+        Some(mut campaign) => {
+            campaign.amount += amount_sent;
+            CAMPAIGN_POOL.save(deps.storage, campaign_id.clone(), &campaign)?;
+        }
+        None => {
+            CAMPAIGN_POOL.save(
+                deps.storage,
+                campaign_id.clone(),
+                &Campaign {
+                    owner: info.sender,
+                    amount: amount_sent,
+                    refundable: false,
+                },
+            )?
+        }
+    };
 
     return Ok(Response::new()
         .add_attribute("method", "deposit")
@@ -184,7 +185,7 @@ pub fn reward_all(
     info: MessageInfo,
     user_rewards: Vec<UserRewardRequest>,
 ) -> Result<Response, StdError> {
-    let mut state = STATE.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
 
     if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner {
         return Err(StdError::generic_err("Only contract owner can call this function"));
@@ -193,37 +194,37 @@ pub fn reward_all(
     let mut res = vec![];
 
     for request in user_rewards {
-        if let Some(campaign) = state.campaign_pool.get_mut(&request.campaign_id) {
-            let user_pool_id = format!("{}_{}", request.user_address, request.campaign_id);
 
-            let flag: bool = campaign.amount >= request.amount;
+        match CAMPAIGN_POOL.may_load(deps.storage, request.campaign_id.clone())? {
+            Some(mut campaign) => {
+                let can_assign: bool = campaign.amount >= request.amount;
 
-            if flag {
-                if let Some(user_pool) = state.user_pool.get_mut(&user_pool_id) {
-                    user_pool.amount += request.amount;
-                    campaign.amount -= request.amount;
-                } else {
-                    state.user_pool.insert(
-                        user_pool_id.clone(),
-                        UserPool {
-                            amount: request.amount,
-                        },
-                    );
-                    campaign.amount -= request.amount;
+                if can_assign {
+                    let user_pool_id = format!("{}_{}", request.user_address, request.campaign_id.clone());
+                    match USER_POOL.may_load(deps.storage, user_pool_id.clone())? {
+                        Some(mut user_pool) => {
+                            user_pool += request.amount;
+                            campaign.amount -= request.amount;
+                            USER_POOL.save(deps.storage, user_pool_id.clone(), &user_pool)?;
+                        }
+                        None => {
+                            campaign.amount -= request.amount;
+                            USER_POOL.save(deps.storage, user_pool_id.clone(), &request.amount)?;
+                        }
+                    };
+                    CAMPAIGN_POOL.save(deps.storage, request.campaign_id.clone(), &campaign)?;
                 }
+                res.push(UserRewardResponse {
+                    campaign_id: request.campaign_id.clone(),
+                    user_address: request.user_address.clone(),
+                    status: can_assign,
+                });
             }
-
-            res.push(UserRewardResponse {
-                campaign_id: request.campaign_id.clone(),
-                user_address: request.user_address.clone(),
-                status: flag,
-            });
-
-        } else {
-            return Err(StdError::generic_err("Campaign does not exist"));
+            None => {
+                return Err(StdError::generic_err("Campaign does not exist"));
+            }
         }
     }
-    STATE.save(deps.storage, &state)?;
 
     return Ok(Response::new()
         .add_attribute("method", "reward_all")
@@ -237,54 +238,49 @@ pub fn claim(
     info: MessageInfo,
     campaign_id: String,
 ) -> Result<Response, StdError>  {
-    let mut state = STATE.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
 
     let bond_denom = deps.querier.query_bonded_denom()?;
     let mut funds = info.funds.clone();
-    let coin = funds.pop().unwrap();
     let claim_reward_fee = state.claim_reward_fee;
+
+    match funds.pop() {
+        Some(coin) => {
+            if coin.denom != bond_denom {
+                return Err(StdError::generic_err("Invalid denom"));
+            }
+
+            if coin.amount != Uint128::from(claim_reward_fee) {
+                return Err(StdError::generic_err(format!("You must attach {}{} to claim reward", claim_reward_fee, bond_denom)));
+            }
+        }
+        None => {
+            return Err(StdError::generic_err(format!("You must attach {}{} to claim reward", claim_reward_fee, bond_denom)));
+        }
+    }
 
     if funds.len() > 0 {
         return Err(StdError::generic_err("Only one coin is allowed"));
     }
 
-    if coin.denom != bond_denom {
-        return Err(StdError::generic_err("Invalid denom"));
-    }
-
-    if coin.amount != Uint128::from(claim_reward_fee) {
-        return Err(StdError::generic_err(format!("You must attach {}{} to claim reward", claim_reward_fee, bond_denom)));
-    }
-
-    let amount;
-
     let user_pool_id = format!("{}_{}", info.sender.to_string(), campaign_id);
 
-    if let Some(user_pool) = state.user_pool.get_mut(&user_pool_id) {
-        amount = user_pool.amount;
+    return match USER_POOL.may_load(deps.storage, user_pool_id.clone())? {
+        Some(user_pool) => {
+            USER_POOL.remove(deps.storage, user_pool_id.clone());
 
-        if amount < Uint128::one() {
-            state.user_pool.remove(&user_pool_id);
-            return Err(StdError::generic_err("Nothing to claim"));
+            Ok(Response::new()
+                .add_attribute("method", "set_refundable")
+                .add_message(CosmosMsg::Bank(BankMsg::Send {
+                    to_address: info.sender.to_string(),
+                    amount: vec![Coin { denom: bond_denom.clone(), amount: user_pool }],
+                }))
+            )
         }
-
-    } else {
-        return Err(StdError::generic_err("User pool does not exist"));
+        None => {
+            Err(StdError::generic_err("User pool does not exist"))
+        }
     }
-
-    state.user_pool.remove(&user_pool_id);
-
-    STATE.save(deps.storage, &state)?;
-
-    let bond_denom = deps.querier.query_bonded_denom()?;
-    let res = Response::new()
-        .add_attribute("method", "claim")
-        .add_message(CosmosMsg::Bank(BankMsg::Send {
-            to_address: info.sender.to_string(),
-            amount: vec![Coin { denom: bond_denom.clone(), amount }],
-        }));
-
-    return Ok(res);
 }
 
 pub fn check(
@@ -299,35 +295,41 @@ pub fn check(
         return Err(StdError::generic_err("Only contract owner can call this function"));
     }
 
+    if requests.is_empty() {
+        return Err(StdError::generic_err("No reward requests provided"));
+    }
+
     let mut res = vec![];
 
     for request in requests {
-        if let Some(campaign) = state.campaign_pool.get_mut(&request.campaign_id) {
-            let delta = campaign.amount.checked_sub(request.amount);
-            if delta.is_err() {
-                return Err(StdError::generic_err("Provided amount is greater than the current campaign amount"));
+        match CAMPAIGN_POOL.may_load(deps.storage, request.campaign_id.clone())? {
+            Some(mut campaign) => {
+                let delta = campaign.amount.checked_sub(request.amount);
+                if delta.is_err() {
+                    return Err(StdError::generic_err("Provided amount is greater than the current campaign amount"));
+                }
+
+                state.withdrawable_creation_fee += delta.unwrap();
+
+                res.push(CampaignCheckResponse {
+                    campaign_id: request.campaign_id.clone(),
+                    owner: campaign.owner.clone().to_string(),
+                    amount_before_deduction: campaign.amount,
+                });
+
+                campaign.amount = request.amount;
+
+                CAMPAIGN_POOL.save(deps.storage, request.campaign_id.clone(), &campaign)?;
             }
-
-            state.withdrawable_creation_fee += delta.unwrap();
-
-            res.push(CampaignCheckResponse {
-                campaign_id: request.campaign_id.clone(),
-                owner: campaign.owner.clone().to_string(),
-                amount_before_deduction: campaign.amount,
-            });
-
-            campaign.amount = request.amount;
-        } else {
-            return Err(StdError::generic_err("Campaign does not exist"));
+            None => {
+                return Err(StdError::generic_err("Campaign does not exist"))
+            }
         }
     }
-
-    STATE.save(deps.storage, &state)?;
-
-    return Ok(Response::new()
+    Ok(Response::new()
         .add_attribute("method", "check")
         .set_data(to_binary(&res).unwrap())
-    );
+    )
 }
 
 pub fn withdraw(
@@ -399,22 +401,25 @@ pub fn set_refundable(
     info: MessageInfo,
     campaign_id: String,
 ) -> Result<Response, StdError> {
-    let mut state = STATE.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
 
     if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner {
         return Err(StdError::generic_err("Only contract owner can make the campaign refundable"));
     }
 
-    return if let Some(campaign) = state.campaign_pool.get_mut(&campaign_id) {
-        campaign.refundable = true;
-        STATE.save(deps.storage, &state)?;
-
-        return Ok(Response::new()
-            .add_attribute("method", "set_refundable")
-        );
-    } else {
-        Err(StdError::generic_err("Campaign does not exist"))
+    if !CAMPAIGN_POOL.has(deps.storage, campaign_id.clone()){
+        return Err(StdError::generic_err("Campaign does not exist"))
     }
+
+    CAMPAIGN_POOL.update(deps.storage, campaign_id, |campaign| {
+        let mut campaign = campaign.unwrap();
+        campaign.refundable = true;
+        Ok::<Campaign, StdError>(campaign)
+    })?;
+
+    return Ok(Response::new()
+        .add_attribute("method", "set_refundable")
+    );
 }
 
 pub fn cancel(
@@ -423,42 +428,44 @@ pub fn cancel(
     info: MessageInfo,
     campaign_id: String,
 ) -> Result<Response, StdError> {
-    let mut state = STATE.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
 
-    if let Some(campaign) = state.campaign_pool.get_mut(&campaign_id) {
+    match CAMPAIGN_POOL.may_load(deps.storage, campaign_id.clone())? {
+        Some(campaign) => {
+            if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner || info.sender != campaign.owner {
+                return Err(StdError::generic_err("Only campaign owner can cancel the campaign"));
+            }
 
-        if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner || info.sender != campaign.owner {
-            return Err(StdError::generic_err("Only campaign owner can cancel the campaign"));
+            if !campaign.refundable {
+                return Err(StdError::generic_err("Campaign was not set to be refundable"));
+            }
+
+            if campaign.amount < Uint128::one() {
+                CAMPAIGN_POOL.remove(deps.storage, campaign_id);
+                return Ok(Response::new()
+                    .add_attribute("method", "cancel"));
+            }
+
+            let amount = campaign.amount;
+
+            let bond_denom = deps.querier.query_bonded_denom()?;
+            let res = Response::new()
+                .add_attribute("method", "cancel")
+                .add_message(CosmosMsg::Bank(BankMsg::Send {
+                    to_address: campaign.owner.clone().to_string(),
+                    amount: vec![Coin { denom: bond_denom.clone(), amount }],
+                }));
+
+            CAMPAIGN_POOL.remove(deps.storage, campaign_id);
+
+            return Ok(res)
         }
-
-        if !campaign.refundable {
-            return Err(StdError::generic_err("Campaign was not set to be refundable"));
+        None => {
+            Err(StdError::generic_err("Campaign does not exist"))
         }
-
-        if campaign.amount < Uint128::one() {
-            state.campaign_pool.remove(&campaign_id);
-            return Ok(Response::new()
-                .add_attribute("method", "cancel"));
-        }
-
-        let amount = campaign.amount;
-
-        let bond_denom = deps.querier.query_bonded_denom()?;
-        let res = Response::new()
-            .add_attribute("method", "cancel")
-            .add_message(CosmosMsg::Bank(BankMsg::Send {
-                to_address: campaign.owner.clone().to_string(),
-                amount: vec![Coin { denom: bond_denom.clone(), amount }],
-            }));
-
-        state.campaign_pool.remove(&campaign_id);
-        STATE.save(deps.storage, &state)?;
-
-        return Ok(res)
-    } else {
-        Err(StdError::generic_err("Campaign does not exist"))
     }
 }
+
 pub fn set_cpool(
     deps: DepsMut,
     _env: Env,
@@ -466,25 +473,25 @@ pub fn set_cpool(
     campaign_id: String,
     amount: Uint128,
 ) -> Result<Response, StdError> {
-    let mut state = STATE.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
 
     if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner {
         return Err(StdError::generic_err("Only contract owner can set the campaign pool"));
     }
 
-    if let Some(campaign) = state.campaign_pool.get_mut(&campaign_id) {
-        campaign.amount = amount;
-    } else {
-        state.campaign_pool.insert(
-            campaign_id.clone(),
-            Campaign {
+    match CAMPAIGN_POOL.may_load(deps.storage, campaign_id.clone())? {
+        Some(mut campaign) => {
+            campaign.amount = amount;
+            CAMPAIGN_POOL.save(deps.storage, campaign_id, &campaign)
+        }
+        None => {
+            CAMPAIGN_POOL.save(deps.storage, campaign_id, &Campaign {
                 owner: info.sender,
                 amount,
                 refundable: false,
-            },
-        );
-    }
-    STATE.save(deps.storage, &state)?;
+            })
+        }
+    }?;
 
     return Ok(Response::new()
         .add_attribute("method", "set_cpool")
@@ -499,7 +506,7 @@ pub fn set_upool(
     reward_pool_id: String,
     amount: Uint128,
 ) -> Result<Response, StdError> {
-    let mut state = STATE.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
 
     if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner {
         return Err(StdError::generic_err("Only contract owner can set the user pool"));
@@ -507,24 +514,13 @@ pub fn set_upool(
 
     let user_pool_id = format!("{}_{}", user_address, reward_pool_id);
 
-    if let Some(user_pool) = state.user_pool.get_mut(&user_pool_id) {
-        user_pool.amount = amount;
-    } else {
-        state.user_pool.insert(
-            user_pool_id.clone(),
-            UserPool {
-                amount,
-            },
-        );
-
-        return Err(StdError::generic_err("User pool does not exist"))
-    }
-    STATE.save(deps.storage, &state)?;
+    USER_POOL.save(deps.storage, user_pool_id, &amount)?;
 
     return Ok(Response::new()
         .add_attribute("method", "set_upool")
     );
 }
+
 pub fn set_claim_fee(
     deps: DepsMut,
     _env: Env,
@@ -550,7 +546,6 @@ pub fn set_claim_fee(
     );
 }
 
-
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
@@ -561,23 +556,33 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 fn query_campaign_pool(deps: Deps, _env: Env, campaign_id: String) -> StdResult<Binary> {
-    let state = STATE.load(deps.storage)?;
+    let campaign_pool = CAMPAIGN_POOL.may_load(deps.storage, campaign_id)?;
 
-    if let Some(campaign) = state.campaign_pool.get(&campaign_id) {
-        return to_binary(&campaign);
-    } else {
-        return Err(StdError::generic_err("Campaign does not exist"));
+    return match campaign_pool {
+        Some(pool) => {
+            to_binary(&pool)
+        }
+        None => {
+            Err(StdError::generic_err("Campaign does not exist"))
+        }
     }
 }
 
 fn query_user_pool(deps: Deps, _env: Env, user_address: String, reward_pool_id: String) -> StdResult<Binary> {
-    let state = STATE.load(deps.storage)?;
     let user_pool_id = format!("{}_{}", user_address, reward_pool_id);
+    let user_pool = USER_POOL.may_load(deps.storage, user_pool_id)?;
 
-    return if let Some(user_pool) = state.user_pool.get(&user_pool_id) {
-        to_binary(&user_pool)
-    } else {
-        Err(StdError::generic_err("User pool does not exist"))
+    if user_pool.is_some() {
+        return to_binary(&user_pool)
+    }
+
+    return match user_pool {
+        Some(amount) => {
+            to_binary(&amount)
+        }
+        None => {
+            Err(StdError::generic_err("User pool does not exist"))
+        }
     }
 }
 
