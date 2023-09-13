@@ -18,5 +18,5 @@ pub struct State {
 }
 
 pub const STATE: Item<State> = Item::new("state");
-pub const CAMPAIGN_POOL: Map<String, Campaign> = Map::new("cpool");
-pub const USER_POOL: Map<String, Uint128> = Map::new("upool");
+pub const CAMPAIGN_POOL: Map<String, Campaign> = Map::new("campaign_pool");
+pub const USER_POOL: Map<String, Uint128> = Map::new("user_pool");
