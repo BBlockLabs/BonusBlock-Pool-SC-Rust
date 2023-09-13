@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{DepsMut, Env, Response, MessageInfo, StdError, CosmosMsg, BankMsg, Coin, Uint128, Deps, StdResult, Binary, to_binary, Empty};
 use crate::state::{Campaign, CAMPAIGN_POOL, State, STATE, USER_POOL};
 use crate::msg::{CampaignCheckRequest, CampaignCheckResponse, ExecuteMsg, InstantiateMsg, QueryMsg, UserRewardRequest, UserRewardResponse};
-use cw2::{set_contract_version};
+use cw2::{get_contract_version, set_contract_version};
+use semver::Version;
 
 const CONTRACT_NAME: &str = "crates.io:reward_pool";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -19,8 +19,6 @@ pub fn instantiate(
 
     let state = State {
         owner: deps.api.addr_canonicalize(info.sender.as_str())?,
-        campaign_pool: Default::default(),
-        user_pool: Default::default(),
         withdrawable_creation_fee: Uint128::zero(),
         claim_reward_fee: msg.claim_reward_fee.unwrap_or(Uint128::new(1000000000000000000)),
     };
@@ -36,23 +34,18 @@ pub fn instantiate(
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, _msg: Empty) -> Result<Response, StdError> {
+    let new_version: Version = CONTRACT_VERSION.parse().unwrap();
+    let current_version = get_contract_version(deps.storage)?;
+
+    if current_version.contract != CONTRACT_NAME {
+        return Err(StdError::generic_err("Can only upgrade from same contract type"));
+    }
+
+    if current_version.version.parse::<Version>().unwrap() >= new_version {
+        return Err(StdError::generic_err("Cannot upgrade from a newer contract version"));
+    }
 
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-
-    let mut state = STATE.load(deps.storage)?;
-
-    //migration step one
-    for (key, value) in &state.campaign_pool {
-        CAMPAIGN_POOL.save(deps.storage, key.clone(), &value)?;
-    }
-    state.campaign_pool = HashMap::new();
-
-    for (key, value) in &state.user_pool {
-        USER_POOL.save(deps.storage, key.clone(), &value.amount)?;
-    }
-    state.user_pool = HashMap::new();
-
-    STATE.save(deps.storage, &state)?;
 
     Ok(Response::new()
         .add_attribute("method", "migrate")
@@ -249,19 +242,25 @@ pub fn claim(
 
     let bond_denom = deps.querier.query_bonded_denom()?;
     let mut funds = info.funds.clone();
-    let coin = funds.pop().unwrap();
     let claim_reward_fee = state.claim_reward_fee;
+
+    match funds.pop() {
+        Some(coin) => {
+            if coin.denom != bond_denom {
+                return Err(StdError::generic_err("Invalid denom"));
+            }
+
+            if coin.amount != Uint128::from(claim_reward_fee) {
+                return Err(StdError::generic_err(format!("You must attach {}{} to claim reward", claim_reward_fee, bond_denom)));
+            }
+        }
+        None => {
+            return Err(StdError::generic_err(format!("You must attach {}{} to claim reward", claim_reward_fee, bond_denom)));
+        }
+    }
 
     if funds.len() > 0 {
         return Err(StdError::generic_err("Only one coin is allowed"));
-    }
-
-    if coin.denom != bond_denom {
-        return Err(StdError::generic_err("Invalid denom"));
-    }
-
-    if coin.amount != Uint128::from(claim_reward_fee) {
-        return Err(StdError::generic_err(format!("You must attach {}{} to claim reward", claim_reward_fee, bond_denom)));
     }
 
     let user_pool_id = format!("{}_{}", info.sender.to_string(), campaign_id);
