@@ -432,7 +432,7 @@ pub fn cancel(
 
     match CAMPAIGN_POOL.may_load(deps.storage, campaign_id.clone())? {
         Some(campaign) => {
-            if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner || info.sender != campaign.owner {
+            if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner && info.sender != campaign.owner {
                 return Err(StdError::generic_err("Only campaign owner can cancel the campaign"));
             }
 
