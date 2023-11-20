@@ -310,6 +310,7 @@ pub fn check(
                 }
 
                 state.withdrawable_creation_fee += delta.unwrap();
+                STATE.save(deps.storage, &state)?;
 
                 res.push(CampaignCheckResponse {
                     campaign_id: request.campaign_id.clone(),
