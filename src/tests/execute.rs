@@ -9,7 +9,8 @@ use cosmwasm_std::{
 };
 
 use crate::contract::{
-    check, claim, deposit, instantiate, reward_all, set_refundable, withdraw, withdraw_fee,
+    cancel, check, claim, deposit, instantiate, reward_all, set_claim_fee, set_cpool,
+    set_refundable, set_upool, withdraw, withdraw_fee,
 };
 use crate::msg::{
     CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
@@ -505,7 +506,6 @@ fn test_set_refundable() {
     )
     .unwrap();
 
-    // withdraw fee
     assert!(set_refundable(
         deps.as_mut(),
         env.clone(),
@@ -524,6 +524,166 @@ fn test_set_refundable() {
             amount: Uint128::new(100),
             owner: Addr::unchecked("sender1"),
             refundable: true,
+        }
+    );
+}
+
+#[test]
+fn test_cancel() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+
+    instantiate(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        InstantiateMsg {
+            claim_reward_fee: Some(Uint128::new(999)),
+        },
+    )
+    .unwrap();
+
+    deposit(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("sender1", &coins(100, "")),
+        "test_campaign_1".to_string(),
+    )
+    .unwrap();
+
+    set_refundable(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        "test_campaign_1".to_string(),
+    )
+    .unwrap();
+
+    let resp = cancel(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        "test_campaign_1".to_string(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        resp.messages,
+        vec![SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+            to_address: "sender1".to_string(),
+            amount: coins(100, ""),
+        }))]
+    );
+
+    assert_eq!(
+        CAMPAIGN_POOL.has(deps.as_ref().storage, "test_campaign_1".to_string()),
+        false
+    );
+}
+
+#[test]
+fn test_set_cpool() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+
+    instantiate(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        InstantiateMsg {
+            claim_reward_fee: Some(Uint128::new(999)),
+        },
+    )
+    .unwrap();
+
+    let resp = set_cpool(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        "test_campaign_1".to_string(),
+        Uint128::new(100),
+    );
+
+    assert_eq!(resp, Err(StdError::generic_err("Not enough funds")));
+
+    // check campaign
+    let campaign = CAMPAIGN_POOL
+        .load(deps.as_ref().storage, "test_campaign_1".to_string())
+        .unwrap();
+    assert_eq!(
+        campaign,
+        Campaign {
+            amount: Uint128::new(100),
+            owner: Addr::unchecked("creator"),
+            refundable: false,
+        }
+    );
+}
+
+#[test]
+fn test_set_upool() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+
+    instantiate(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        InstantiateMsg {
+            claim_reward_fee: Some(Uint128::new(999)),
+        },
+    )
+    .unwrap();
+
+    let resp = set_upool(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        "user1".to_string(),
+        "test_campaign_1".to_string(),
+        Uint128::new(100),
+    );
+
+    assert_eq!(resp, Err(StdError::generic_err("Campaign does not exist")));
+
+    // check user pool
+    assert_eq!(
+        USER_POOL.has(deps.as_ref().storage, "user1_test_campaign_1".to_string()),
+        false
+    );
+}
+
+#[test]
+fn test_set_claim_fee() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+
+    instantiate(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        InstantiateMsg {
+            claim_reward_fee: Some(Uint128::new(999)),
+        },
+    )
+    .unwrap();
+
+    let res = set_claim_fee(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        Uint128::new(456),
+    );
+    assert!(res.is_ok());
+
+    // check state
+    let state = STATE.load(deps.as_ref().storage).unwrap();
+    assert_eq!(
+        state,
+        State {
+            owner: deps.api.addr_canonicalize("creator").unwrap(),
+            withdrawable_creation_fee: Uint128::new(0),
+            claim_reward_fee: Uint128::new(456),
         }
     );
 }
