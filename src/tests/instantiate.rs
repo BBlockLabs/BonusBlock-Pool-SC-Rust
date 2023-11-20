@@ -1,9 +1,9 @@
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-use cosmwasm_std::{from_slice, Addr, Api, DepsMut, OwnedDeps, Querier, Storage, SubMsg, Uint128};
+use cosmwasm_std::{Api, Uint128};
 
-use crate::contract::{execute, instantiate, query};
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{State, CAMPAIGN_POOL, STATE, USER_POOL};
+use crate::contract::instantiate;
+use crate::msg::InstantiateMsg;
+use crate::state::{State, STATE};
 
 #[test]
 fn test_instantiate_default() {
