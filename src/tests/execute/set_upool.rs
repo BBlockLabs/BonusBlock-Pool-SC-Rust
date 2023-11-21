@@ -91,3 +91,44 @@ fn test_set_upool_nonexistent_campaign() {
         false
     );
 }
+
+
+#[test]
+fn test_set_upool_unauthorized() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+
+    instantiate(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        InstantiateMsg {
+            claim_reward_fee: Some(Uint128::new(999)),
+        },
+    )
+    .unwrap();
+
+    deposit(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("sender1", &coins(100, "")),
+        "test_campaign_1".to_string(),
+    )
+    .unwrap();
+
+    let res = set_upool(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("not_creator", &[]),
+        "user1".to_string(),
+        "test_campaign_1".to_string(),
+        Uint128::new(100),
+    );
+    assert_eq!(res, Err(StdError::generic_err("Only contract owner can set the user pool")));
+
+    // check user pool does not exist
+    assert_eq!(
+        USER_POOL.has(deps.as_ref().storage, "test_campaign_1".to_string()),
+        false
+    );
+}
