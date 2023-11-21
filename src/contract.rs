@@ -310,6 +310,7 @@ pub fn check(
                 }
 
                 state.withdrawable_creation_fee += delta.unwrap();
+                STATE.save(deps.storage, &state)?;
 
                 res.push(CampaignCheckResponse {
                     campaign_id: request.campaign_id.clone(),
@@ -432,7 +433,7 @@ pub fn cancel(
 
     match CAMPAIGN_POOL.may_load(deps.storage, campaign_id.clone())? {
         Some(campaign) => {
-            if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner || info.sender != campaign.owner {
+            if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner && info.sender != campaign.owner {
                 return Err(StdError::generic_err("Only campaign owner can cancel the campaign"));
             }
 
@@ -503,16 +504,19 @@ pub fn set_upool(
     _env: Env,
     info: MessageInfo,
     user_address: String,
-    reward_pool_id: String,
+    campaign_id: String,
     amount: Uint128,
 ) -> Result<Response, StdError> {
     let state = STATE.load(deps.storage)?;
-
     if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner {
         return Err(StdError::generic_err("Only contract owner can set the user pool"));
     }
 
-    let user_pool_id = format!("{}_{}", user_address, reward_pool_id);
+    if !CAMPAIGN_POOL.has(deps.storage, campaign_id.clone()) {
+        return Err(StdError::generic_err("Campaign does not exist"));
+    }
+
+    let user_pool_id = format!("{}_{}", user_address, campaign_id);
 
     USER_POOL.save(deps.storage, user_pool_id, &amount)?;
 
@@ -555,7 +559,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
-fn query_campaign_pool(deps: Deps, _env: Env, campaign_id: String) -> StdResult<Binary> {
+pub fn query_campaign_pool(deps: Deps, _env: Env, campaign_id: String) -> StdResult<Binary> {
     let campaign_pool = CAMPAIGN_POOL.may_load(deps.storage, campaign_id)?;
 
     return match campaign_pool {
@@ -568,7 +572,7 @@ fn query_campaign_pool(deps: Deps, _env: Env, campaign_id: String) -> StdResult<
     }
 }
 
-fn query_user_pool(deps: Deps, _env: Env, user_address: String, reward_pool_id: String) -> StdResult<Binary> {
+pub fn query_user_pool(deps: Deps, _env: Env, user_address: String, reward_pool_id: String) -> StdResult<Binary> {
     let user_pool_id = format!("{}_{}", user_address, reward_pool_id);
     let user_pool = USER_POOL.may_load(deps.storage, user_pool_id)?;
 
@@ -586,7 +590,7 @@ fn query_user_pool(deps: Deps, _env: Env, user_address: String, reward_pool_id: 
     }
 }
 
-fn query_claim_fee(deps: Deps, _env: Env) -> StdResult<Binary> {
+pub fn query_claim_fee(deps: Deps, _env: Env) -> StdResult<Binary> {
     let state = STATE.load(deps.storage)?;
     to_binary(&state.claim_reward_fee)
 }
