@@ -559,7 +559,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
-fn query_campaign_pool(deps: Deps, _env: Env, campaign_id: String) -> StdResult<Binary> {
+pub fn query_campaign_pool(deps: Deps, _env: Env, campaign_id: String) -> StdResult<Binary> {
     let campaign_pool = CAMPAIGN_POOL.may_load(deps.storage, campaign_id)?;
 
     return match campaign_pool {
@@ -572,7 +572,7 @@ fn query_campaign_pool(deps: Deps, _env: Env, campaign_id: String) -> StdResult<
     }
 }
 
-fn query_user_pool(deps: Deps, _env: Env, user_address: String, reward_pool_id: String) -> StdResult<Binary> {
+pub fn query_user_pool(deps: Deps, _env: Env, user_address: String, reward_pool_id: String) -> StdResult<Binary> {
     let user_pool_id = format!("{}_{}", user_address, reward_pool_id);
     let user_pool = USER_POOL.may_load(deps.storage, user_pool_id)?;
 
@@ -590,7 +590,7 @@ fn query_user_pool(deps: Deps, _env: Env, user_address: String, reward_pool_id: 
     }
 }
 
-fn query_claim_fee(deps: Deps, _env: Env) -> StdResult<Binary> {
+pub fn query_claim_fee(deps: Deps, _env: Env) -> StdResult<Binary> {
     let state = STATE.load(deps.storage)?;
     to_binary(&state.claim_reward_fee)
 }
