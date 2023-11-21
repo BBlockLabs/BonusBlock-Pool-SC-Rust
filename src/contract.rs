@@ -504,16 +504,19 @@ pub fn set_upool(
     _env: Env,
     info: MessageInfo,
     user_address: String,
-    reward_pool_id: String,
+    campaign_id: String,
     amount: Uint128,
 ) -> Result<Response, StdError> {
     let state = STATE.load(deps.storage)?;
-
     if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner {
         return Err(StdError::generic_err("Only contract owner can set the user pool"));
     }
 
-    let user_pool_id = format!("{}_{}", user_address, reward_pool_id);
+    if !CAMPAIGN_POOL.has(deps.storage, campaign_id.clone()) {
+        return Err(StdError::generic_err("Campaign does not exist"));
+    }
+
+    let user_pool_id = format!("{}_{}", user_address, campaign_id);
 
     USER_POOL.save(deps.storage, user_pool_id, &amount)?;
 
