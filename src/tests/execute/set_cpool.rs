@@ -101,3 +101,31 @@ fn test_set_existing_cpool() {
         }
     );
 }
+
+#[test]
+fn test_set_new_cpool_unauthorized() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+
+    instantiate(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        InstantiateMsg {
+            claim_reward_fee: Some(Uint128::new(999)),
+        },
+    )
+    .unwrap();
+
+    let res = set_cpool(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("not_creator", &coins(100, "")),
+        "test_campaign_1".to_string(),
+        Uint128::new(100),
+    );
+    assert_eq!(
+        res.unwrap_err(),
+        StdError::generic_err("Only contract owner can set the campaign pool")
+    );
+}
