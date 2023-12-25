@@ -1,5 +1,4 @@
 mod cancel;
-mod check;
 mod claim;
 mod deposit;
 mod reward_all;
@@ -8,4 +7,3 @@ mod set_cpool;
 mod set_refundable;
 mod set_upool;
 mod withdraw;
-mod withdraw_fee;

@@ -21,19 +21,6 @@ pub struct UserRewardResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct CampaignCheckRequest {
-    pub campaign_id: String,
-    pub amount: Uint128,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct CampaignCheckResponse {
-    pub campaign_id: String,
-    pub owner: String,
-    pub amount_before_deduction: Uint128,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     Deposit {
@@ -45,13 +32,9 @@ pub enum ExecuteMsg {
     Claim {
         campaign_id: String
     },
-    Check {
-        requests: Vec<CampaignCheckRequest>
-    },
     Withdraw {
         amount: Uint128,
     },
-    WithdrawFee {},
     SetRefundable {
         campaign_id: String
     },
