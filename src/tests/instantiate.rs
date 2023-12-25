@@ -21,7 +21,6 @@ fn test_instantiate_default() {
         state,
         State {
             owner: deps.api.addr_canonicalize("sender").unwrap(),
-            withdrawable_creation_fee: Uint128::zero(),
             claim_reward_fee: Uint128::new(1000000000000000000),
         }
     );
@@ -43,7 +42,6 @@ fn test_instantiate_with_custom_claim_fee() {
         state,
         State {
             owner: deps.api.addr_canonicalize("sender").unwrap(),
-            withdrawable_creation_fee: Uint128::zero(),
             claim_reward_fee: Uint128::new(1000000000000000000),
         }
     );

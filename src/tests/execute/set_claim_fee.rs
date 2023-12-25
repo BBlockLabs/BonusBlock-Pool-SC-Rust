@@ -9,11 +9,11 @@ use cosmwasm_std::{
 };
 
 use crate::contract::{
-    cancel, check, claim, deposit, instantiate, reward_all, set_claim_fee, set_cpool,
-    set_refundable, set_upool, withdraw, withdraw_fee,
+    cancel,  claim, deposit, instantiate, reward_all, set_claim_fee, set_cpool,
+    set_refundable, set_upool, withdraw, 
 };
 use crate::msg::{
-    CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
+     InstantiateMsg, UserRewardRequest,
     UserRewardResponse,
 };
 use crate::state::{Campaign, State, CAMPAIGN_POOL, STATE, USER_POOL};
@@ -47,7 +47,6 @@ fn test_set_claim_fee() {
         state,
         State {
             owner: deps.api.addr_canonicalize("creator").unwrap(),
-            withdrawable_creation_fee: Uint128::new(0),
             claim_reward_fee: Uint128::new(456),
         }
     );
@@ -87,7 +86,6 @@ fn test_set_claim_fee_unauthorized() {
         state,
         State {
             owner: deps.api.addr_canonicalize("creator").unwrap(),
-            withdrawable_creation_fee: Uint128::new(0),
             claim_reward_fee: Uint128::new(999),
         }
     );

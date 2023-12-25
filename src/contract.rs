@@ -2,7 +2,7 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{DepsMut, Env, Response, MessageInfo, StdError, CosmosMsg, BankMsg, Coin, Uint128, Deps, StdResult, Binary, to_binary, Empty};
 use crate::state::{Campaign, CAMPAIGN_POOL, State, STATE, USER_POOL};
-use crate::msg::{CampaignCheckRequest, CampaignCheckResponse, ExecuteMsg, InstantiateMsg, QueryMsg, UserRewardRequest, UserRewardResponse};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, UserRewardRequest, UserRewardResponse};
 use cw2::{get_contract_version, set_contract_version};
 use semver::Version;
 
@@ -19,7 +19,6 @@ pub fn instantiate(
 
     let state = State {
         owner: deps.api.addr_canonicalize(info.sender.as_str())?,
-        withdrawable_creation_fee: Uint128::zero(),
         claim_reward_fee: msg.claim_reward_fee.unwrap_or(Uint128::new(1000000000000000000)),
     };
 
@@ -79,22 +78,11 @@ pub fn execute(
             info,
             campaign_id,
         ),
-        ExecuteMsg::Check { requests } => check(
-            deps,
-            env,
-            info,
-            requests,
-        ),
         ExecuteMsg::Withdraw { amount } => withdraw(
             deps,
             env,
             info,
             amount,
-        ),
-        ExecuteMsg::WithdrawFee {} => withdraw_fee(
-            deps,
-            env,
-            info,
         ),
         ExecuteMsg::SetRefundable { campaign_id } => set_refundable(
             deps,
@@ -283,56 +271,6 @@ pub fn claim(
     }
 }
 
-pub fn check(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    requests: Vec<CampaignCheckRequest>,
-) -> Result<Response, StdError> {
-    let mut state = STATE.load(deps.storage)?;
-
-    if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner {
-        return Err(StdError::generic_err("Only contract owner can call this function"));
-    }
-
-    if requests.is_empty() {
-        return Err(StdError::generic_err("No reward requests provided"));
-    }
-
-    let mut res = vec![];
-
-    for request in requests {
-        match CAMPAIGN_POOL.may_load(deps.storage, request.campaign_id.clone())? {
-            Some(mut campaign) => {
-                let delta = campaign.amount.checked_sub(request.amount);
-                if delta.is_err() {
-                    return Err(StdError::generic_err("Provided amount is greater than the current campaign amount"));
-                }
-
-                state.withdrawable_creation_fee += delta.unwrap();
-                STATE.save(deps.storage, &state)?;
-
-                res.push(CampaignCheckResponse {
-                    campaign_id: request.campaign_id.clone(),
-                    owner: campaign.owner.clone().to_string(),
-                    amount_before_deduction: campaign.amount,
-                });
-
-                campaign.amount = request.amount;
-
-                CAMPAIGN_POOL.save(deps.storage, request.campaign_id.clone(), &campaign)?;
-            }
-            None => {
-                return Err(StdError::generic_err("Campaign does not exist"))
-            }
-        }
-    }
-    Ok(Response::new()
-        .add_attribute("method", "check")
-        .set_data(to_binary(&res).unwrap())
-    )
-}
-
 pub fn withdraw(
     deps: DepsMut,
     env: Env,
@@ -360,34 +298,6 @@ pub fn withdraw(
 
     let res = Response::new()
         .add_attribute("method", "withdraw")
-        .add_message(CosmosMsg::Bank(BankMsg::Send {
-            to_address,
-            amount: vec![Coin { denom: bond_denom.clone(), amount }],
-        }));
-
-    return Ok(res)
-}
-
-pub fn withdraw_fee(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-) -> Result<Response, StdError> {
-    let mut state = STATE.load(deps.storage)?;
-
-    if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner {
-        return Err(StdError::generic_err("Only contract owner can withdraw"));
-    }
-
-    let amount = state.withdrawable_creation_fee;
-    state.withdrawable_creation_fee = Uint128::zero();
-
-    STATE.save(deps.storage, &state)?;
-    let bond_denom = deps.querier.query_bonded_denom()?;
-    let to_address = deps.api.addr_humanize(&state.owner)?.to_string();
-
-    let res = Response::new()
-        .add_attribute("method", "withdraw_fee")
         .add_message(CosmosMsg::Bank(BankMsg::Send {
             to_address,
             amount: vec![Coin { denom: bond_denom.clone(), amount }],

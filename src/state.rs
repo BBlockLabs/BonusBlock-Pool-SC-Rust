@@ -13,7 +13,6 @@ pub struct Campaign {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
     pub owner: CanonicalAddr,
-    pub withdrawable_creation_fee: Uint128,
     pub claim_reward_fee: Uint128,
 }
 
