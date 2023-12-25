@@ -255,7 +255,9 @@ pub fn claim(
             }
         }
         None => {
-            return Err(StdError::generic_err(format!("You must attach {}{} to claim reward", claim_reward_fee, bond_denom)));
+            if claim_reward_fee != Uint128::zero() {
+                return Err(StdError::generic_err(format!("You must attach {}{} to claim reward", claim_reward_fee, bond_denom)));
+            }
         }
     }
 
