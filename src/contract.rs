@@ -96,12 +96,6 @@ pub fn execute(
             env,
             info,
         ),
-        ExecuteMsg::SetRefundable { campaign_id } => set_refundable(
-            deps,
-            env,
-            info,
-            campaign_id,
-        ),
         ExecuteMsg::Cancel { campaign_id } => cancel(
             deps,
             env,
@@ -168,7 +162,6 @@ pub fn deposit(
                 &Campaign {
                     owner: info.sender,
                     amount: amount_sent,
-                    refundable: false,
                 },
             )?
         }
@@ -396,33 +389,6 @@ pub fn withdraw_fee(
     return Ok(res)
 }
 
-pub fn set_refundable(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    campaign_id: String,
-) -> Result<Response, StdError> {
-    let state = STATE.load(deps.storage)?;
-
-    if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner {
-        return Err(StdError::generic_err("Only contract owner can make the campaign refundable"));
-    }
-
-    if !CAMPAIGN_POOL.has(deps.storage, campaign_id.clone()){
-        return Err(StdError::generic_err("Campaign does not exist"))
-    }
-
-    CAMPAIGN_POOL.update(deps.storage, campaign_id, |campaign| {
-        let mut campaign = campaign.unwrap();
-        campaign.refundable = true;
-        Ok::<Campaign, StdError>(campaign)
-    })?;
-
-    return Ok(Response::new()
-        .add_attribute("method", "set_refundable")
-    );
-}
-
 pub fn cancel(
     deps: DepsMut,
     _env: Env,
@@ -435,10 +401,6 @@ pub fn cancel(
         Some(campaign) => {
             if deps.api.addr_canonicalize(info.sender.as_str())? != state.owner && info.sender != campaign.owner {
                 return Err(StdError::generic_err("Only campaign owner can cancel the campaign"));
-            }
-
-            if !campaign.refundable {
-                return Err(StdError::generic_err("Campaign was not set to be refundable"));
             }
 
             if campaign.amount < Uint128::one() {
@@ -489,7 +451,6 @@ pub fn set_cpool(
             CAMPAIGN_POOL.save(deps.storage, campaign_id, &Campaign {
                 owner: info.sender,
                 amount,
-                refundable: false,
             })
         }
     }?;

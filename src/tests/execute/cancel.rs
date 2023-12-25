@@ -10,7 +10,7 @@ use cosmwasm_std::{
 
 use crate::contract::{
     cancel, check, claim, deposit, instantiate, reward_all, set_claim_fee, set_cpool,
-    set_refundable, set_upool, withdraw, withdraw_fee,
+     set_upool, withdraw, withdraw_fee,
 };
 use crate::msg::{
     CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
@@ -41,13 +41,6 @@ fn test_cancel_as_contract_owner() {
     )
     .unwrap();
 
-    set_refundable(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("creator", &[]),
-        "test_campaign_1".to_string(),
-    )
-    .unwrap();
 
     let resp = cancel(
         deps.as_mut(),
@@ -94,14 +87,6 @@ fn test_cancel_as_campaign_owner() {
     )
     .unwrap();
 
-    set_refundable(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("creator", &[]),
-        "test_campaign_1".to_string(),
-    )
-    .unwrap();
-
     let resp = cancel(
         deps.as_mut(),
         env.clone(),
@@ -122,46 +107,6 @@ fn test_cancel_as_campaign_owner() {
         CAMPAIGN_POOL.has(deps.as_ref().storage, "test_campaign_1".to_string()),
         false
     );
-}
-
-#[test]
-fn test_cancel_non_refundable_campaign() {
-    let mut deps = mock_dependencies();
-    let env = mock_env();
-
-    instantiate(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("creator", &[]),
-        InstantiateMsg {
-            claim_reward_fee: Some(Uint128::new(999)),
-        },
-    )
-    .unwrap();
-
-    deposit(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("sender1", &coins(100, "")),
-        "test_campaign_1".to_string(),
-    )
-    .unwrap();
-
-    let res = cancel(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("creator", &[]),
-        "test_campaign_1".to_string(),
-    );
-
-    assert_eq!(
-        res,
-        Err(StdError::generic_err(
-            "Campaign was not set to be refundable"
-        ))
-    );
-
-    assert!(CAMPAIGN_POOL.has(deps.as_ref().storage, "test_campaign_1".to_string()));
 }
 
 #[test]

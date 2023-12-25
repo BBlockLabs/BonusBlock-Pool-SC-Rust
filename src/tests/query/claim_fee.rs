@@ -10,7 +10,7 @@ use cosmwasm_std::{
 
 use crate::contract::{
     cancel, check, claim, deposit, instantiate, query_campaign_pool, query_user_pool, reward_all,
-    set_claim_fee, set_cpool, set_refundable, set_upool, withdraw, withdraw_fee, query_claim_fee,
+    set_claim_fee, set_cpool,  set_upool, withdraw, withdraw_fee, query_claim_fee,
 };
 use crate::msg::{
     CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
