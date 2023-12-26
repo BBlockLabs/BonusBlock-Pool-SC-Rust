@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 pub struct Campaign {
     pub amount: Uint128,
     pub owner: Addr,
-    pub refundable: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

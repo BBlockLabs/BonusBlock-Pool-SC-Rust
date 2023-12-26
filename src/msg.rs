@@ -52,9 +52,6 @@ pub enum ExecuteMsg {
         amount: Uint128,
     },
     WithdrawFee {},
-    SetRefundable {
-        campaign_id: String
-    },
     Cancel {
         campaign_id: String
     },

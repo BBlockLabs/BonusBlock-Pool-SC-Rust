@@ -10,7 +10,7 @@ use cosmwasm_std::{
 
 use crate::contract::{
     cancel, check, claim, deposit, instantiate, query_campaign_pool, reward_all, set_claim_fee,
-    set_cpool, set_refundable, set_upool, withdraw, withdraw_fee,
+    set_cpool,  set_upool, withdraw, withdraw_fee,
 };
 use crate::msg::{
     CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
@@ -49,7 +49,6 @@ fn test_query_campaign_pool() {
         Campaign {
             amount: Uint128::new(1000),
             owner: Addr::unchecked("sender1"),
-            refundable: false,
         }
     );
 }

@@ -10,7 +10,7 @@ use cosmwasm_std::{
 
 use crate::contract::{
     cancel, check, claim, deposit, instantiate, reward_all, set_claim_fee, set_cpool,
-    set_refundable, set_upool, withdraw, withdraw_fee,
+     set_upool, withdraw, withdraw_fee,
 };
 use crate::msg::{
     CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
@@ -51,7 +51,6 @@ fn test_set_new_cpool() {
         Campaign {
             amount: Uint128::new(100),
             owner: Addr::unchecked("creator"),
-            refundable: false,
         }
     );
 }
@@ -97,7 +96,6 @@ fn test_set_existing_cpool() {
         Campaign {
             amount: Uint128::new(2000),
             owner: Addr::unchecked("sender1"),
-            refundable: false,
         }
     );
 }
