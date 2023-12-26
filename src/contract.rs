@@ -270,7 +270,7 @@ pub fn claim(
             USER_POOL.remove(deps.storage, user_pool_id.clone());
 
             Ok(Response::new()
-                .add_attribute("method", "set_refundable")
+                .add_attribute("method", "claim")
                 .add_message(CosmosMsg::Bank(BankMsg::Send {
                     to_address: info.sender.to_string(),
                     amount: vec![Coin { denom: bond_denom.clone(), amount: user_pool }],
