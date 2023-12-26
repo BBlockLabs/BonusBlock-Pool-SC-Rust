@@ -33,7 +33,7 @@ fn test_instantiate_with_custom_claim_fee() {
     let info = mock_info("sender", &[]);
     let env = mock_env();
     let msg = InstantiateMsg {
-        claim_reward_fee: None,
+        claim_reward_fee: Some(Uint128::new(99)),
     };
 
     instantiate(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
@@ -44,7 +44,7 @@ fn test_instantiate_with_custom_claim_fee() {
         State {
             owner: deps.api.addr_canonicalize("sender").unwrap(),
             withdrawable_creation_fee: Uint128::zero(),
-            claim_reward_fee: Uint128::new(1000000000000000000),
+            claim_reward_fee: Uint128::new(99),
         }
     );
 }
