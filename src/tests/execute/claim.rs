@@ -106,3 +106,70 @@ fn test_claim() {
 
     assert_eq!(resp, Err(StdError::generic_err("User pool does not exist")));
 }
+
+
+#[test]
+fn test_claim_zero_fee() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+
+    instantiate(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        InstantiateMsg {
+            claim_reward_fee: Some(Uint128::new(0)),
+        },
+    )
+    .unwrap();
+
+    deposit(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("sender", &coins(1000, "")),
+        "test_campaign_1".to_string(),
+    )
+    .unwrap();
+
+    // reward the users
+    reward_all(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("creator", &[]),
+        vec![
+            UserRewardRequest {
+                campaign_id: "test_campaign_1".to_string(),
+                user_address: "user1".to_string(),
+                amount: Uint128::new(1000),
+            },
+            UserRewardRequest {
+                campaign_id: "test_campaign_1".to_string(),
+                user_address: "user2".to_string(),
+                amount: Uint128::new(1000),
+            },
+        ],
+    )
+    .unwrap();
+
+    // try to claim from user1
+    let resp = claim(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("user1", &[]),
+        "test_campaign_1".to_string(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        resp.messages,
+        vec![SubMsg::new(CosmosMsg::Bank(BankMsg::Send {
+            to_address: "user1".to_string(),
+            amount: coins(1000, ""),
+        }))]
+    );
+
+    assert_eq!(
+        USER_POOL.has(deps.as_ref().storage, "user1_test_campaign_1".to_string()),
+        false
+    );
+}
