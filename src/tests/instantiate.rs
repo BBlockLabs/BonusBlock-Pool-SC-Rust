@@ -3,7 +3,7 @@ use cosmwasm_std::{Api, Uint128};
 
 use crate::contract::instantiate;
 use crate::msg::InstantiateMsg;
-use crate::state::{State, STATE};
+use crate::state::{ADMIN, PUBKEY};
 
 #[test]
 fn test_instantiate_default() {
@@ -22,7 +22,6 @@ fn test_instantiate_default() {
         State {
             owner: deps.api.addr_canonicalize("sender").unwrap(),
             withdrawable_creation_fee: Uint128::zero(),
-            claim_reward_fee: Uint128::new(1000000000000000000),
         }
     );
 }
@@ -44,7 +43,6 @@ fn test_instantiate_with_custom_claim_fee() {
         State {
             owner: deps.api.addr_canonicalize("sender").unwrap(),
             withdrawable_creation_fee: Uint128::zero(),
-            claim_reward_fee: Uint128::new(99),
         }
     );
 }

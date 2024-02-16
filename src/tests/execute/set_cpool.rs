@@ -8,15 +8,9 @@ use cosmwasm_std::{
     MessageInfo, StdError, SubMsg, Uint128,
 };
 
-use crate::contract::{
-    cancel, check, claim, deposit, instantiate, reward_all, set_claim_fee, set_cpool,
-    set_refundable, set_upool, withdraw, withdraw_fee,
-};
-use crate::msg::{
-    CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
-    UserRewardResponse,
-};
-use crate::state::{Campaign, State, CAMPAIGN_POOL, STATE, USER_POOL};
+use crate::contract::{cancel, claim, deposit, instantiate, set_cpool, withdraw};
+use crate::msg::{InstantiateMsg, UserRewardRequest, UserRewardResponse};
+use crate::state::{Campaign, CAMPAIGN_POOL};
 
 #[test]
 fn test_set_new_cpool() {
@@ -51,7 +45,6 @@ fn test_set_new_cpool() {
         Campaign {
             amount: Uint128::new(100),
             owner: Addr::unchecked("creator"),
-            refundable: false,
         }
     );
 }
@@ -97,7 +90,6 @@ fn test_set_existing_cpool() {
         Campaign {
             amount: Uint128::new(2000),
             owner: Addr::unchecked("sender1"),
-            refundable: false,
         }
     );
 }

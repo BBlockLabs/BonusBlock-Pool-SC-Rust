@@ -9,14 +9,10 @@ use cosmwasm_std::{
 };
 
 use crate::contract::{
-    cancel, check, claim, deposit, instantiate, query_campaign_pool, reward_all, set_claim_fee,
-    set_cpool, set_refundable, set_upool, withdraw, withdraw_fee,
+    cancel, claim, deposit, instantiate, query_campaign_pool, set_cpool, withdraw,
 };
-use crate::msg::{
-    CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
-    UserRewardResponse,
-};
-use crate::state::{Campaign, State, CAMPAIGN_POOL, STATE, USER_POOL};
+use crate::msg::{InstantiateMsg, UserRewardRequest, UserRewardResponse};
+use crate::state::{Campaign, CAMPAIGN_POOL};
 
 #[test]
 fn test_query_campaign_pool() {
@@ -27,9 +23,7 @@ fn test_query_campaign_pool() {
         deps.as_mut(),
         env.clone(),
         mock_info("creator", &[]),
-        InstantiateMsg {
-            claim_reward_fee: None,
-        },
+        InstantiateMsg {},
     )
     .unwrap();
 
@@ -49,7 +43,6 @@ fn test_query_campaign_pool() {
         Campaign {
             amount: Uint128::new(1000),
             owner: Addr::unchecked("sender1"),
-            refundable: false,
         }
     );
 }
@@ -63,9 +56,7 @@ fn test_query_campaign_pool_empty() {
         deps.as_mut(),
         env.clone(),
         mock_info("creator", &[]),
-        InstantiateMsg {
-            claim_reward_fee: None,
-        },
+        InstantiateMsg {},
     )
     .unwrap();
 

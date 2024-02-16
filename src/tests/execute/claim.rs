@@ -8,15 +8,9 @@ use cosmwasm_std::{
     MessageInfo, StdError, SubMsg, Uint128,
 };
 
-use crate::contract::{
-    cancel, check, claim, deposit, instantiate, reward_all, set_claim_fee, set_cpool,
-    set_refundable, set_upool, withdraw, withdraw_fee,
-};
-use crate::msg::{
-    CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
-    UserRewardResponse,
-};
-use crate::state::{Campaign, State, CAMPAIGN_POOL, STATE, USER_POOL};
+use crate::contract::{cancel, claim, deposit, instantiate, set_cpool, withdraw};
+use crate::msg::{InstantiateMsg, UserRewardRequest, UserRewardResponse};
+use crate::state::{Campaign, CAMPAIGN_POOL};
 
 #[test]
 fn test_claim() {
@@ -38,26 +32,6 @@ fn test_claim() {
         env.clone(),
         mock_info("sender", &coins(1000, "")),
         "test_campaign_1".to_string(),
-    )
-    .unwrap();
-
-    // reward the users
-    reward_all(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("creator", &[]),
-        vec![
-            UserRewardRequest {
-                campaign_id: "test_campaign_1".to_string(),
-                user_address: "user1".to_string(),
-                amount: Uint128::new(1000),
-            },
-            UserRewardRequest {
-                campaign_id: "test_campaign_1".to_string(),
-                user_address: "user2".to_string(),
-                amount: Uint128::new(1000),
-            },
-        ],
     )
     .unwrap();
 
@@ -91,11 +65,6 @@ fn test_claim() {
         }))]
     );
 
-    assert_eq!(
-        USER_POOL.has(deps.as_ref().storage, "user1_test_campaign_1".to_string()),
-        false
-    );
-
     // try to claim from user2 who doesn't exist
     let resp = claim(
         deps.as_mut(),
@@ -106,7 +75,6 @@ fn test_claim() {
 
     assert_eq!(resp, Err(StdError::generic_err("User pool does not exist")));
 }
-
 
 #[test]
 fn test_claim_zero_fee() {
@@ -131,26 +99,6 @@ fn test_claim_zero_fee() {
     )
     .unwrap();
 
-    // reward the users
-    reward_all(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("creator", &[]),
-        vec![
-            UserRewardRequest {
-                campaign_id: "test_campaign_1".to_string(),
-                user_address: "user1".to_string(),
-                amount: Uint128::new(1000),
-            },
-            UserRewardRequest {
-                campaign_id: "test_campaign_1".to_string(),
-                user_address: "user2".to_string(),
-                amount: Uint128::new(1000),
-            },
-        ],
-    )
-    .unwrap();
-
     // try to claim from user1
     let resp = claim(
         deps.as_mut(),
@@ -166,10 +114,5 @@ fn test_claim_zero_fee() {
             to_address: "user1".to_string(),
             amount: coins(1000, ""),
         }))]
-    );
-
-    assert_eq!(
-        USER_POOL.has(deps.as_ref().storage, "user1_test_campaign_1".to_string()),
-        false
     );
 }
