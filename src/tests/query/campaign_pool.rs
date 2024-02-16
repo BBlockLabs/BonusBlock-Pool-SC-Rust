@@ -4,8 +4,8 @@ use cosmwasm_std::testing::{
     mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
 };
 use cosmwasm_std::{
-    coins, from_binary, from_json, Addr, Api, BankMsg, CanonicalAddr, CosmosMsg, Deps, DepsMut,
-    Env, MessageInfo, StdError, SubMsg, Uint128,
+    coins, from_binary, from_json, to_json_binary, Addr, Api, BankMsg, CanonicalAddr, CosmosMsg,
+    Deps, DepsMut, Env, MessageInfo, StdError, SubMsg, Uint128,
 };
 
 use crate::contract::{
@@ -23,7 +23,9 @@ fn test_query_campaign_pool() {
         deps.as_mut(),
         env.clone(),
         mock_info("creator", &[]),
-        InstantiateMsg {},
+        InstantiateMsg {
+            pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
+        },
     )
     .unwrap();
 
@@ -56,7 +58,9 @@ fn test_query_campaign_pool_empty() {
         deps.as_mut(),
         env.clone(),
         mock_info("creator", &[]),
-        InstantiateMsg {},
+        InstantiateMsg {
+            pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
+        },
     )
     .unwrap();
 
