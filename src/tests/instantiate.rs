@@ -1,9 +1,9 @@
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-use cosmwasm_std::{Api, Uint128};
+use cosmwasm_std::{to_json_binary, Api};
 
 use crate::contract::instantiate;
 use crate::msg::InstantiateMsg;
-use crate::state::{State, STATE};
+use crate::state::{ADMIN, PUBKEY};
 
 #[test]
 fn test_instantiate_default() {
@@ -11,20 +11,13 @@ fn test_instantiate_default() {
     let info = mock_info("sender", &[]);
     let env = mock_env();
     let msg = InstantiateMsg {
-        claim_reward_fee: None,
+        pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
     };
 
     instantiate(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
 
-    let state = STATE.load(deps.as_ref().storage).unwrap();
-    assert_eq!(
-        state,
-        State {
-            owner: deps.api.addr_canonicalize("sender").unwrap(),
-            withdrawable_creation_fee: Uint128::zero(),
-            claim_reward_fee: Uint128::new(1000000000000000000),
-        }
-    );
+    let admin = ADMIN.load(deps.as_ref().storage).unwrap();
+    assert_eq!(admin, deps.api.addr_canonicalize("sender").unwrap());
 }
 
 #[test]
@@ -33,18 +26,12 @@ fn test_instantiate_with_custom_claim_fee() {
     let info = mock_info("sender", &[]);
     let env = mock_env();
     let msg = InstantiateMsg {
-        claim_reward_fee: Some(Uint128::new(99)),
+        pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
     };
 
     instantiate(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
 
-    let state = STATE.load(deps.as_ref().storage).unwrap();
-    assert_eq!(
-        state,
-        State {
-            owner: deps.api.addr_canonicalize("sender").unwrap(),
-            withdrawable_creation_fee: Uint128::zero(),
-            claim_reward_fee: Uint128::new(99),
-        }
-    );
+    let admin = ADMIN.load(deps.as_ref().storage).unwrap();
+    let pubkey = PUBKEY.load(&deps.storage).unwrap();
+    assert_eq!(admin, deps.api.addr_canonicalize("sender").unwrap());
 }

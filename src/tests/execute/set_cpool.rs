@@ -4,19 +4,13 @@ use cosmwasm_std::testing::{
     mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
 };
 use cosmwasm_std::{
-    coins, from_binary, from_json, Addr, Api, BankMsg, CanonicalAddr, CosmosMsg, DepsMut, Env,
-    MessageInfo, StdError, SubMsg, Uint128,
+    coins, from_binary, from_json, to_json_binary, Addr, Api, BankMsg, CanonicalAddr, CosmosMsg,
+    DepsMut, Env, MessageInfo, StdError, SubMsg, Uint128,
 };
 
-use crate::contract::{
-    cancel, check, claim, deposit, instantiate, reward_all, set_claim_fee, set_cpool,
-    set_refundable, set_upool, withdraw, withdraw_fee,
-};
-use crate::msg::{
-    CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
-    UserRewardResponse,
-};
-use crate::state::{Campaign, State, CAMPAIGN_POOL, STATE, USER_POOL};
+use crate::contract::{cancel, claim, deposit, instantiate, set_cpool, withdraw};
+use crate::msg::{InstantiateMsg, UserRewardRequest, UserRewardResponse};
+use crate::state::{Campaign, CAMPAIGN_POOL};
 
 #[test]
 fn test_set_new_cpool() {
@@ -28,7 +22,7 @@ fn test_set_new_cpool() {
         env.clone(),
         mock_info("creator", &[]),
         InstantiateMsg {
-            claim_reward_fee: Some(Uint128::new(999)),
+            pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
         },
     )
     .unwrap();
@@ -51,7 +45,6 @@ fn test_set_new_cpool() {
         Campaign {
             amount: Uint128::new(100),
             owner: Addr::unchecked("creator"),
-            refundable: false,
         }
     );
 }
@@ -66,7 +59,7 @@ fn test_set_existing_cpool() {
         env.clone(),
         mock_info("creator", &[]),
         InstantiateMsg {
-            claim_reward_fee: Some(Uint128::new(999)),
+            pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
         },
     )
     .unwrap();
@@ -97,7 +90,6 @@ fn test_set_existing_cpool() {
         Campaign {
             amount: Uint128::new(2000),
             owner: Addr::unchecked("sender1"),
-            refundable: false,
         }
     );
 }
@@ -112,7 +104,7 @@ fn test_set_new_cpool_unauthorized() {
         env.clone(),
         mock_info("creator", &[]),
         InstantiateMsg {
-            claim_reward_fee: Some(Uint128::new(999)),
+            pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
         },
     )
     .unwrap();

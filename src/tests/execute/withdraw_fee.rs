@@ -8,15 +8,9 @@ use cosmwasm_std::{
     MessageInfo, StdError, SubMsg, Uint128,
 };
 
-use crate::contract::{
-    cancel, check, claim, deposit, instantiate, reward_all, set_claim_fee, set_cpool,
-    set_refundable, set_upool, withdraw, withdraw_fee,
-};
-use crate::msg::{
-    CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
-    UserRewardResponse,
-};
-use crate::state::{Campaign, State, CAMPAIGN_POOL, STATE, USER_POOL};
+use crate::contract::{cancel, claim, deposit, instantiate, set_cpool, withdraw, withdraw_fee};
+use crate::msg::{InstantiateMsg, UserRewardRequest, UserRewardResponse};
+use crate::state::{Campaign, State, CAMPAIGN_POOL, STATE};
 
 #[test]
 fn test_withdraw_fee() {
@@ -46,24 +40,6 @@ fn test_withdraw_fee() {
         env.clone(),
         mock_info("sender2", &coins(200, "")),
         "test_campaign_2".to_string(),
-    )
-    .unwrap();
-
-    // successful checks on two campaigns
-    check(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("creator", &[]),
-        vec![
-            CampaignCheckRequest {
-                campaign_id: "test_campaign_1".to_string(),
-                amount: Uint128::new(50),
-            },
-            CampaignCheckRequest {
-                campaign_id: "test_campaign_2".to_string(),
-                amount: Uint128::new(80),
-            },
-        ],
     )
     .unwrap();
 
@@ -109,28 +85,10 @@ fn test_withdraw_fee_unauthorized() {
     )
     .unwrap();
 
-    // successful checks on two campaigns
-    check(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("creator", &[]),
-        vec![
-            CampaignCheckRequest {
-                campaign_id: "test_campaign_1".to_string(),
-                amount: Uint128::new(50),
-            },
-            CampaignCheckRequest {
-                campaign_id: "test_campaign_2".to_string(),
-                amount: Uint128::new(80),
-            },
-        ],
-    )
-    .unwrap();
-
     // withdraw fee
     let res = withdraw_fee(deps.as_mut(), env.clone(), mock_info("not_creator", &[]));
     assert_eq!(
         res,
-        Err(StdError::generic_err("Only contract owner can withdraw")) 
+        Err(StdError::generic_err("Only contract owner can withdraw"))
     );
 }

@@ -4,19 +4,13 @@ use cosmwasm_std::testing::{
     mock_dependencies, mock_dependencies_with_balance, mock_env, mock_info,
 };
 use cosmwasm_std::{
-    coins, from_binary, from_json, Addr, Api, BankMsg, CanonicalAddr, CosmosMsg, DepsMut, Env,
-    MessageInfo, StdError, SubMsg, Uint128,
+    coins, from_binary, from_json, to_json_binary, Addr, Api, BankMsg, CanonicalAddr, CosmosMsg,
+    DepsMut, Env, MessageInfo, StdError, SubMsg, Uint128,
 };
 
-use crate::contract::{
-    cancel, check, claim, deposit, instantiate, reward_all, set_claim_fee, set_cpool,
-    set_refundable, set_upool, withdraw, withdraw_fee,
-};
-use crate::msg::{
-    CampaignCheckRequest, CampaignCheckResponse, InstantiateMsg, UserRewardRequest,
-    UserRewardResponse,
-};
-use crate::state::{Campaign, State, CAMPAIGN_POOL, STATE, USER_POOL};
+use crate::contract::{cancel, claim, deposit, instantiate, set_cpool, withdraw};
+use crate::msg::{InstantiateMsg, UserRewardRequest, UserRewardResponse};
+use crate::state::{Campaign, CAMPAIGN_POOL};
 
 #[test]
 fn test_cancel_as_contract_owner() {
@@ -28,7 +22,7 @@ fn test_cancel_as_contract_owner() {
         env.clone(),
         mock_info("creator", &[]),
         InstantiateMsg {
-            claim_reward_fee: Some(Uint128::new(999)),
+            pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
         },
     )
     .unwrap();
@@ -37,14 +31,6 @@ fn test_cancel_as_contract_owner() {
         deps.as_mut(),
         env.clone(),
         mock_info("sender1", &coins(100, "")),
-        "test_campaign_1".to_string(),
-    )
-    .unwrap();
-
-    set_refundable(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("creator", &[]),
         "test_campaign_1".to_string(),
     )
     .unwrap();
@@ -81,7 +67,7 @@ fn test_cancel_as_campaign_owner() {
         env.clone(),
         mock_info("creator", &[]),
         InstantiateMsg {
-            claim_reward_fee: Some(Uint128::new(999)),
+            pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
         },
     )
     .unwrap();
@@ -90,14 +76,6 @@ fn test_cancel_as_campaign_owner() {
         deps.as_mut(),
         env.clone(),
         mock_info("sender1", &coins(100, "")),
-        "test_campaign_1".to_string(),
-    )
-    .unwrap();
-
-    set_refundable(
-        deps.as_mut(),
-        env.clone(),
-        mock_info("creator", &[]),
         "test_campaign_1".to_string(),
     )
     .unwrap();
@@ -134,7 +112,7 @@ fn test_cancel_non_refundable_campaign() {
         env.clone(),
         mock_info("creator", &[]),
         InstantiateMsg {
-            claim_reward_fee: Some(Uint128::new(999)),
+            pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
         },
     )
     .unwrap();
@@ -174,7 +152,7 @@ fn test_cancel_non_existent_campaign() {
         env.clone(),
         mock_info("creator", &[]),
         InstantiateMsg {
-            claim_reward_fee: Some(Uint128::new(999)),
+            pubkey: to_json_binary(&"test_key".to_string()).unwrap(),
         },
     )
     .unwrap();
